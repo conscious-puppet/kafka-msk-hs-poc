@@ -7,7 +7,7 @@ module AWS.Auth (
 )
 where
 
-import Amazonka (LogLevel (..), Region, newEnv, runResourceT, send)
+import Amazonka (LogLevel (..), Region (..), configureService, newEnv, runResourceT, send, setEndpoint)
 import Amazonka.Auth (discover)
 import Amazonka.Crypto (hashSHA256, hmacSHA256)
 import Amazonka.Data.Sensitive (Sensitive (..), fromSensitive)
@@ -15,7 +15,7 @@ import Amazonka.Data.Time (Time (..))
 import Amazonka.Env (logger)
 import Amazonka.Env qualified as Env
 import Amazonka.Logger (newLogger)
-import Amazonka.STS (newAssumeRole)
+import Amazonka.STS (defaultService, newAssumeRole)
 import Amazonka.STS.AssumeRole (AssumeRoleResponse (..))
 import Amazonka.Types (AccessKey (..), AuthEnv (..), SecretKey (..), SessionToken (..))
 import Control.Concurrent (threadDelay)
@@ -38,7 +38,9 @@ data IAMToken = IAMToken
   }
   deriving stock (Show)
 
--- | Assume a role using STS and return the credentials
+{- | Assume a role using STS and return the credentials
+Uses regional STS endpoint to avoid timeout issues with global endpoint
+-}
 assumeRole :: Text -> Text -> Region -> IO IAMToken
 assumeRole roleArn sessionName region = do
   putStrLn $ "[AWS.Auth] Assuming role: " <> toString roleArn
@@ -55,9 +57,16 @@ assumeRole roleArn sessionName region = do
   resp <- runResourceT $ do
     -- Create environment with debug logging and proper region
     env <- newEnv discover
-    let envWithConfig = (env {logger = debugLogger}) {Env.region = region}
-    putStrLn "[AWS.Auth] Env created with debug logging and region, sending request..."
-    send envWithConfig req
+    let envWithRegion = (env {logger = debugLogger}) {Env.region = region}
+
+    -- Configure STS to use regional endpoint instead of global sts.amazonaws.com
+    -- This matches the behavior of AWS_STS_REGIONAL_ENDPOINTS=regional in other SDKs
+    let stsEndpoint = encodeUtf8 $ "sts." <> fromRegion region <> ".amazonaws.com"
+    let stsService = setEndpoint True stsEndpoint 443 defaultService
+    let envWithSTS = configureService stsService envWithRegion
+
+    putStrLn $ "[AWS.Auth] Using STS regional endpoint: " <> decodeUtf8 stsEndpoint
+    send envWithSTS req
 
   -- Extract credentials from response
   let authEnv = credentials resp
@@ -79,6 +88,10 @@ assumeRole roleArn sessionName region = do
     fromAccessKey (AccessKey bs) = bs
     fromSecretKey (SecretKey bs) = bs
     fromSessionToken (SessionToken bs) = bs
+
+    -- Helper to extract region text from Region type
+    fromRegion :: Region -> Text
+    fromRegion (Region' r) = r
 
 {- | Generate IAM token for MSK SASL/PLAIN authentication
 Returns (username, password) where username is the access key ID
