@@ -20,6 +20,7 @@ import Control.Concurrent.Async (Async, async)
 import Data.ByteArray (ByteArrayAccess, convert)
 import Data.ByteArray.Encoding qualified as BA
 import Data.ByteString.Char8 qualified as B8
+import Data.Text (isInfixOf, toLower)
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kafka.Consumer (KafkaError (..))
