@@ -20,8 +20,6 @@ import Control.Concurrent.Async (Async, async)
 import Data.ByteArray (ByteArrayAccess, convert)
 import Data.ByteArray.Encoding qualified as BA
 import Data.ByteString.Char8 qualified as B8
-import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, formatTime)
 import Kafka.Consumer (KafkaError (..))
@@ -39,7 +37,7 @@ data IAMToken = IAMToken
 -- | Assume a role using STS and return the credentials
 assumeRole :: Text -> Text -> Region -> IO IAMToken
 assumeRole roleArn sessionName _region = do
-  putStrLn $ "[AWS.Auth] Assuming role: " <> T.unpack roleArn
+  putStrLn $ "[AWS.Auth] Assuming role: " <> toString roleArn
 
   -- Build the AssumeRole request
   let req = newAssumeRole roleArn sessionName
@@ -58,9 +56,9 @@ assumeRole roleArn sessionName _region = do
   now <- getCurrentTime
   let token =
         IAMToken
-          { iamAccessKeyId = TE.decodeUtf8 (fromAccessKey $ accessKeyId authEnv)
-          , iamSecretAccessKey = TE.decodeUtf8 (fromSecretKey $ fromSensitive $ secretAccessKey authEnv)
-          , iamSessionToken = maybe "" (TE.decodeUtf8 . fromSessionToken . fromSensitive) (sessionToken authEnv)
+          { iamAccessKeyId = decodeUtf8 (fromAccessKey $ accessKeyId authEnv)
+          , iamSecretAccessKey = decodeUtf8 (fromSecretKey $ fromSensitive $ secretAccessKey authEnv)
+          , iamSessionToken = maybe "" (decodeUtf8 . fromSessionToken . fromSensitive) (sessionToken authEnv)
           , iamExpiration = maybe now (\(Time t) -> t) (expiration authEnv)
           }
 
@@ -87,9 +85,9 @@ generateIAMToken token brokerHost region = do
       canonicalUri = "/"
       canonicalQueryString = "Action=Bootstrap"
 
-      hostHeader = "host:" <> T.unpack brokerHost
+      hostHeader = "host:" <> toString brokerHost
       xAmzDateHeader = "x-amz-date:" <> dateStr
-      xAmzSecurityTokenHeader = "x-amz-security-token:" <> T.unpack (urlEncodeText $ iamSessionToken token)
+      xAmzSecurityTokenHeader = "x-amz-security-token:" <> toString (urlEncodeText $ iamSessionToken token)
 
       signedHeaders = "host;x-amz-date;x-amz-security-token"
       canonicalHeaders = hostHeader <> "\n" <> xAmzDateHeader <> "\n" <> xAmzSecurityTokenHeader <> "\n"
@@ -106,7 +104,7 @@ generateIAMToken token brokerHost region = do
           <> "\n"
           <> "UNSIGNED-PAYLOAD"
 
-      credentialScope = dateStamp <> "/" <> T.unpack region <> "/" <> service <> "/aws4_request"
+      credentialScope = dateStamp <> "/" <> toString region <> "/" <> service <> "/aws4_request"
 
       stringToSign =
         algorithm
@@ -117,18 +115,18 @@ generateIAMToken token brokerHost region = do
           <> "\n"
           <> digestToHex (hashSHA256 $ B8.pack canonicalRequest)
 
-      signingKey = deriveSigningKey (TE.encodeUtf8 $ iamSecretAccessKey token) dateStamp (T.unpack region) service
+      signingKey = deriveSigningKey (encodeUtf8 $ iamSecretAccessKey token) dateStamp (toString region) service
       signature = digestToHex $ hmacSHA256 signingKey (B8.pack stringToSign)
 
       saslPassword =
         "host="
-          <> T.unpack brokerHost
+          <> toString brokerHost
           <> "&x-amz-date="
           <> dateStr
           <> "&x-amz-security-token="
-          <> T.unpack (urlEncodeText $ iamSessionToken token)
+          <> toString (urlEncodeText $ iamSessionToken token)
           <> "&x-amz-credential="
-          <> T.unpack (urlEncodeText $ iamAccessKeyId token <> "/" <> T.pack dateStamp <> "/" <> region <> "/" <> T.pack service <> "/aws4_request")
+          <> toString (urlEncodeText $ iamAccessKeyId token <> "/" <> toText dateStamp <> "/" <> region <> "/" <> toText service <> "/aws4_request")
           <> "&x-amz-signedheaders="
           <> signedHeaders
           <> "&x-amz-algorithm="
@@ -136,17 +134,17 @@ generateIAMToken token brokerHost region = do
           <> "&x-amz-signature="
           <> signature
 
-  pure (iamAccessKeyId token, T.pack saslPassword)
+  pure (iamAccessKeyId token, toText saslPassword)
   where
     urlEncodeText :: Text -> Text
-    urlEncodeText = TE.decodeUtf8 . urlEncode False . TE.encodeUtf8
+    urlEncodeText = decodeUtf8 . urlEncode False . encodeUtf8
 
     digestToHex :: (ByteArrayAccess a) => a -> String
     digestToHex = B8.unpack . BA.convertToBase BA.Base16
 
     deriveSigningKey :: ByteString -> String -> String -> String -> ByteString
     deriveSigningKey secretKey date region' service' =
-      let kDate = convert $ hmacSHA256 (B8.pack $ "AWS4" <> T.unpack (TE.decodeUtf8 secretKey)) (B8.pack date)
+      let kDate = convert $ hmacSHA256 (B8.pack $ "AWS4" <> toString (decodeUtf8 secretKey)) (B8.pack date)
           kRegion = convert $ hmacSHA256 kDate (B8.pack region')
           kService = convert $ hmacSHA256 kRegion (B8.pack service')
           kSigning = convert $ hmacSHA256 kService (B8.pack "aws4_request")
@@ -158,7 +156,7 @@ This calls STS AssumeRole and updates the TVar
 startTokenRefresher :: TVar IAMToken -> Text -> Text -> Region -> IO (Async ())
 startTokenRefresher tokenVar roleArn sessionName region = do
   putStrLn "[TokenRefresher] Starting token refresh thread (interval: 10 seconds)"
-  async $ forever $ do
+  async $ infinitely $ do
     timestamp <- getCurrentTime
     putStrLn $ "[TokenRefresher] Refreshing token at " <> show timestamp
 
@@ -176,11 +174,11 @@ startTokenRefresher tokenVar roleArn sessionName region = do
 -- | Check if a KafkaError is an authentication error
 isAuthError :: KafkaError -> Bool
 isAuthError (KafkaError msg)
-  | "authentication" `T.isInfixOf` T.toLower msg = True
-  | "auth" `T.isInfixOf` T.toLower msg = True
-  | "sasl" `T.isInfixOf` T.toLower msg = True
-  | "credential" `T.isInfixOf` T.toLower msg = True
-  | "token" `T.isInfixOf` T.toLower msg = True
+  | "authentication" `isInfixOf` toLower msg = True
+  | "auth" `isInfixOf` toLower msg = True
+  | "sasl" `isInfixOf` toLower msg = True
+  | "credential" `isInfixOf` toLower msg = True
+  | "token" `isInfixOf` toLower msg = True
   | otherwise = False
 isAuthError (KafkaResponseError _) = True
 isAuthError _ = False

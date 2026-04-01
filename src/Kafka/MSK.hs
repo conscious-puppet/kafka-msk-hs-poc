@@ -6,8 +6,6 @@ where
 
 import AWS.Auth (IAMToken (..), generateIAMToken, isAuthError)
 import Control.Exception (bracket, throwIO)
-import Data.Text qualified as T
-import Data.Text.Encoding qualified as TE
 import Kafka.Consumer
 import System.IO.Error (userError)
 
@@ -36,7 +34,7 @@ runMSKConsumer config tokenVar = do
         newConsumer props sub
     )
     ( \case
-        Left _ -> pure ()
+        Left _ -> pass
         Right kc -> do
           putStrLn "[Kafka.MSK] Closing Kafka consumer"
           void $ closeConsumer kc
@@ -79,14 +77,14 @@ pollLoop tokenVar consumer = go
           -- Print the message
           case crValue record of
             Nothing -> putStrLn "[Kafka.MSK] Received message with no value"
-            Just bs -> putStrLn $ "[Kafka.MSK] Received message: " <> T.unpack (TE.decodeUtf8 bs)
+            Just bs -> putStrLn $ "[Kafka.MSK] Received message: " <> toString (decodeUtf8 bs)
 
           -- Continue polling (no offset commit, will re-read from earliest on restart)
           go
 
 -- | Extract host from "host:port" format
 extractBrokerHost :: Text -> Text
-extractBrokerHost = T.takeWhile (/= ':')
+extractBrokerHost = takeWhile (/= ':')
 
 mkConsumerProps :: KafkaConfig -> Text -> Text -> ConsumerProperties
 mkConsumerProps config username password =

@@ -5,7 +5,6 @@ module Config (
 where
 
 import Control.Exception (throwIO)
-import Data.Text qualified as T
 import System.IO.Error (userError)
 
 data Config = Config
@@ -30,7 +29,7 @@ getEnvVar :: String -> IO Text
 getEnvVar name =
   lookupEnv name >>= \case
     Nothing -> throwIO $ userError $ "Environment variable " <> name <> " is required"
-    Just val -> pure $ T.pack val
+    Just val -> pure $ toText val
 
 lookupEnvText :: String -> IO (Maybe Text)
-lookupEnvText name = fmap T.pack <$> lookupEnv name
+lookupEnvText name = fmap toText <$> lookupEnv name

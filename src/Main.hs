@@ -5,7 +5,6 @@ import Amazonka (Region)
 import Config (Config (..), loadConfig)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (cancel)
-import Data.Text qualified as T
 import Kafka.MSK (KafkaConfig (..), runMSKConsumer)
 import Main.Utf8 qualified as Utf8
 
@@ -21,19 +20,19 @@ main = Utf8.withUtf8 $ do
   putStrLn "[Main] Loading configuration..."
   config <- loadConfig
 
-  putStrLn $ "[Main] Configuration loaded:"
-  putStrLn $ "  Role ARN: " <> T.unpack (awsRoleArn config)
-  putStrLn $ "  Bootstrap: " <> T.unpack (mskBootstrapServers config)
-  putStrLn $ "  Topic: " <> T.unpack (mskTopic config)
-  putStrLn $ "  Region: " <> T.unpack (mskRegion config)
+  putStrLn "[Main] Configuration loaded:"
+  putStrLn $ "  Role ARN: " <> toString (awsRoleArn config)
+  putStrLn $ "  Bootstrap: " <> toString (mskBootstrapServers config)
+  putStrLn $ "  Topic: " <> toString (mskTopic config)
+  putStrLn $ "  Region: " <> toString (mskRegion config)
 
   -- Parse region
-  region <- case parseRegion (T.unpack $ mskRegion config) of
+  region <- case parseRegion (toString $ mskRegion config) of
     Left err -> error $ "[Main] Invalid region: " <> err
     Right r -> pure r
 
   -- Supervisor loop: handles reconnections on auth errors
-  void $ forever $ do
+  void $ infinitely $ do
     putStrLn "\n[Main] === Starting new connection cycle ==="
 
     -- Step 1: Assume role via STS
@@ -57,7 +56,7 @@ main = Utf8.withUtf8 $ do
             , region = mskRegion config
             }
 
-    putStrLn $ "[Main] Starting consumer (will reconnect on auth errors)..."
+    putStrLn "[Main] Starting consumer (will reconnect on auth errors)..."
     result <- runMSKConsumer kafkaConfig tokenVar
 
     -- Step 5: Consumer returned (either auth error or fatal error)
