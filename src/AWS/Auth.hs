@@ -174,14 +174,25 @@ startTokenRefresher tokenVar roleArn sessionName region = do
     -- Wait 10 seconds before next refresh
     threadDelay (10 * 1000000)
 
--- | Check if a KafkaError is an authentication error
-isAuthError :: KafkaError -> Bool
-isAuthError (KafkaError msg)
-  | "authentication" `isInfixOf` toLower msg = True
-  | "auth" `isInfixOf` toLower msg = True
-  | "sasl" `isInfixOf` toLower msg = True
-  | "credential" `isInfixOf` toLower msg = True
-  | "token" `isInfixOf` toLower msg = True
-  | otherwise = False
-isAuthError (KafkaResponseError _) = True
-isAuthError _ = False
+{- | Check if a KafkaError is an authentication error
+Logs each check attempt for debugging
+-}
+isAuthError :: KafkaError -> IO Bool
+isAuthError err@(KafkaError msg) = do
+  putStrLn $ "[AWS.Auth.isAuthError] Checking KafkaError: " <> show err
+  let msgLower = toLower msg
+      result
+        | "authentication" `isInfixOf` msgLower = True
+        | "auth" `isInfixOf` msgLower = True
+        | "sasl" `isInfixOf` msgLower = True
+        | "credential" `isInfixOf` msgLower = True
+        | "token" `isInfixOf` msgLower = True
+        | otherwise = False
+  putStrLn $ "[AWS.Auth.isAuthError] Result: " <> show result <> ", msg: " <> show msg
+  pure result
+isAuthError err@(KafkaResponseError _) = do
+  putStrLn $ "[AWS.Auth.isAuthError] Found KafkaResponseError: " <> show err
+  pure True
+isAuthError err = do
+  putStrLn $ "[AWS.Auth.isAuthError] Not an auth error: " <> show err
+  pure False

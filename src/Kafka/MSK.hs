@@ -45,7 +45,8 @@ runMSKConsumer config tokenVar = do
     ( \case
         Left err -> do
           putStrLn $ "[Kafka.MSK] Failed to create consumer: " <> show err
-          if isAuthError err
+          isAuth <- isAuthError err
+          if isAuth
             then pure $ Left err
             else throwIO $ userError $ "Fatal error creating consumer: " <> show err
         Right consumer -> do
@@ -69,7 +70,8 @@ pollLoop tokenVar consumer = go
       case msg of
         Left err -> do
           putStrLn $ "[Kafka.MSK] Poll error: " <> show err
-          if isAuthError err
+          isAuth <- isAuthError err
+          if isAuth
             then do
               putStrLn "[Kafka.MSK] Authentication error detected, will reconnect"
               pure $ Left err
@@ -81,7 +83,13 @@ pollLoop tokenVar consumer = go
           -- Print the message
           case crValue record of
             Nothing -> putStrLn "[Kafka.MSK] Received message with no value"
-            Just bs -> putStrLn $ "[Kafka.MSK] Received message: " <> T.unpack (decodeUtf8 bs)
+            Just bs -> do
+              let msgContent = T.unpack (decodeUtf8 bs)
+              putStrLn $ "[Kafka.MSK] =============================="
+              putStrLn $ "[Kafka.MSK] RECEIVED MESSAGE:"
+              putStrLn $ "[Kafka.MSK] =============================="
+              putStrLn $ "[Kafka.MSK] " <> msgContent
+              putStrLn $ "[Kafka.MSK] =============================="
 
           -- Continue polling (no offset commit, will re-read from earliest on restart)
           go

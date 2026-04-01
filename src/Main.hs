@@ -62,14 +62,17 @@ main = Utf8.withUtf8 $ do
     cancel refresher
 
     case result of
-      Left err | isAuthError err -> do
-        putStrLn $ "[Main] Authentication error detected: " <> show err
-        putStrLn "[Main] Will reconnect with fresh token in 2 seconds..."
-        threadDelay (2 * 1000000) -- Wait 2 seconds before reconnect
-        putStrLn "[Main] Reconnecting now..."
       Left err -> do
-        putStrLn $ "[Main] Fatal error, crashing: " <> show err
-        exitFailure
+        isAuth <- isAuthError err
+        if isAuth
+          then do
+            putStrLn $ "[Main] Authentication error detected: " <> show err
+            putStrLn "[Main] Will reconnect with fresh token in 2 seconds..."
+            threadDelay (2 * 1000000) -- Wait 2 seconds before reconnect
+            putStrLn "[Main] Reconnecting now..."
+          else do
+            putStrLn $ "[Main] Fatal error, crashing: " <> show err
+            exitFailure
       Right () -> do
         putStrLn "[Main] Consumer exited normally (unexpected), restarting..."
         threadDelay (2 * 1000000)
