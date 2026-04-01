@@ -1,18 +1,18 @@
 module Main where
 
 import AWS.Auth (assumeRole, isAuthError, startTokenRefresher)
-import Amazonka (Region)
+import Amazonka (Region (..))
 import Config (Config (..), loadConfig)
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (cancel)
 import Kafka.MSK (KafkaConfig (..), runMSKConsumer)
 import Main.Utf8 qualified as Utf8
 
--- | Parse a region string into Amazonka Region type
-parseRegion :: String -> Either Text Region
-parseRegion s = case readEither s of
-  Left e -> Left e
-  Right r -> Right r
+{- | Convert region text to Amazonka Region type
+Region is just a newtype wrapper around Text, so we construct it directly
+-}
+regionFromText :: Text -> Region
+regionFromText = Region'
 
 main :: IO ()
 main = Utf8.withUtf8 $ do
@@ -26,10 +26,8 @@ main = Utf8.withUtf8 $ do
   putStrLn $ "  Topic: " <> toString (mskTopic config)
   putStrLn $ "  Region: " <> toString (mskRegion config)
 
-  -- Parse region
-  region <- case parseRegion (toString $ mskRegion config) of
-    Left err -> error $ "[Main] Invalid region: " <> err
-    Right r -> pure r
+  -- Convert region text to Region type
+  let region = regionFromText (mskRegion config)
 
   -- Supervisor loop: handles reconnections on auth errors
   void $ infinitely $ do
