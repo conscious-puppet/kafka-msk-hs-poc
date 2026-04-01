@@ -71,12 +71,12 @@ RUN echo 'http://dl-cdn.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositori
     apk update && \
     apk add --no-cache "curl=~8.19"
 
-# Download Kafka
+# Download Kafka 3.9.2 (latest available version)
 RUN mkdir -p /opt && cd /opt && \
-    wget https://downloads.apache.org/kafka/3.7.0/kafka_2.13-3.7.0.tgz && \
-    tar -xzf kafka_2.13-3.7.0.tgz && \
-    mv kafka_2.13-3.7.0 kafka && \
-    rm kafka_2.13-3.7.0.tgz
+    wget https://downloads.apache.org/kafka/3.9.2/kafka_2.13-3.9.2.tgz && \
+    tar -xzf kafka_2.13-3.9.2.tgz && \
+    mv kafka_2.13-3.9.2 kafka && \
+    rm kafka_2.13-3.9.2.tgz
 
 # Download AWS MSK IAM auth library
 RUN cd /opt && \
