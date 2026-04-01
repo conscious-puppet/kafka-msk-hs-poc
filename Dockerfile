@@ -19,11 +19,18 @@ RUN apt-get update && apt-get install -y \
     redis-tools \
     unzip \
     zip \
-    awscli \
     vim-tiny \
     net-tools \
     iputils-ping \
+    groff \
+    less \
     && rm -rf /var/lib/apt/lists/*
+
+# Install AWS CLI v2
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf aws awscliv2.zip
 
 # Install Kafka CLI tools
 RUN mkdir -p /opt && cd /opt && \
