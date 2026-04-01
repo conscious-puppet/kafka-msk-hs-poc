@@ -30,3 +30,7 @@ hie.yaml
 # Misc
 prompt.md
 vira.hs
+
+# Docker
+Dockerfile
+.dockerignore

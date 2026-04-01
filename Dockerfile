@@ -1,15 +1,31 @@
 # Multi-stage Dockerfile for kafka-aws-haskell
-# Stage 1: Build with Nix
-FROM nixos/nix:latest AS builder
+# Stage 1: Build with Cabal
+FROM haskell:9.10-slim AS builder
 
-# Enable flakes
-RUN echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf
+# Install system dependencies for librdkafka
+RUN apt-get update && apt-get install -y \
+    librdkafka-dev \
+    libssl-dev \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-COPY . .
 
-# Build the project
-RUN nix build .
+# Copy cabal files first for better caching
+COPY kafka-aws-haskell.cabal ./
+
+# Update cabal and build dependencies
+RUN cabal update && cabal build --only-dependencies
+
+# Copy source code
+COPY src/ ./src/
+
+# Build the executable
+RUN cabal build exe:kafka-aws-haskell
+
+# Find and copy the built binary to a known location
+RUN mkdir -p /opt/app && \
+    cp $(cabal list-bin kafka-aws-haskell) /opt/app/kafka-aws-haskell
 
 # Stage 2: Runtime image (Alpine-based with all required packages)
 FROM alpine:latest
@@ -79,7 +95,7 @@ ENV PYTHONPATH="/usr/lib/python3.12/site-packages"
 WORKDIR /opt
 
 # Copy the binary from builder
-COPY --from=builder /build/result/bin/kafka-aws-haskell /opt/app/kafka-aws-haskell
+COPY --from=builder /opt/app/kafka-aws-haskell /opt/app/kafka-aws-haskell
 
 # Ensure binary is executable
 RUN chmod +x /opt/app/kafka-aws-haskell
