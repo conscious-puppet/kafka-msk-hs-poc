@@ -1,3 +1,5 @@
+{- HLINT ignore "Use toString" -}
+
 module Kafka.MSK (
   runMSKConsumer,
   KafkaConfig (..),
@@ -6,6 +8,7 @@ where
 
 import AWS.Auth (IAMToken (..), generateIAMToken, isAuthError)
 import Control.Exception (bracket, throwIO)
+import Data.Text qualified as T
 import Kafka.Consumer
 import System.IO.Error (userError)
 
@@ -77,14 +80,14 @@ pollLoop tokenVar consumer = go
           -- Print the message
           case crValue record of
             Nothing -> putStrLn "[Kafka.MSK] Received message with no value"
-            Just bs -> putStrLn $ "[Kafka.MSK] Received message: " <> toString (decodeUtf8 bs)
+            Just bs -> putStrLn $ "[Kafka.MSK] Received message: " <> T.unpack (decodeUtf8 bs)
 
           -- Continue polling (no offset commit, will re-read from earliest on restart)
           go
 
 -- | Extract host from "host:port" format
 extractBrokerHost :: Text -> Text
-extractBrokerHost = takeWhile (/= ':')
+extractBrokerHost = T.takeWhile (/= ':')
 
 mkConsumerProps :: KafkaConfig -> Text -> Text -> ConsumerProperties
 mkConsumerProps config username password =

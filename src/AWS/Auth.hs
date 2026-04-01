@@ -145,11 +145,13 @@ generateIAMToken token brokerHost region = do
 
     deriveSigningKey :: ByteString -> String -> String -> String -> ByteString
     deriveSigningKey secretKey date region' service' =
-      let kDate = convert $ hmacSHA256 (B8.pack $ "AWS4" <> toString (decodeUtf8 secretKey)) (B8.pack date)
+      let kDate = convert $ hmacSHA256 (B8.pack $ "AWS4" <> B8.unpack secretKey) (B8.pack date)
           kRegion = convert $ hmacSHA256 kDate (B8.pack region')
           kService = convert $ hmacSHA256 kRegion (B8.pack service')
           kSigning = convert $ hmacSHA256 kService (B8.pack "aws4_request")
        in kSigning
+
+{- HLINT ignore startTokenRefresher "Use infinitely" -}
 
 {- | Start a background thread that refreshes the token every 10 seconds
 This calls STS AssumeRole and updates the TVar
@@ -157,7 +159,7 @@ This calls STS AssumeRole and updates the TVar
 startTokenRefresher :: TVar IAMToken -> Text -> Text -> Region -> IO (Async ())
 startTokenRefresher tokenVar roleArn sessionName region = do
   putStrLn "[TokenRefresher] Starting token refresh thread (interval: 10 seconds)"
-  async $ infinitely $ do
+  async $ forever $ do
     timestamp <- getCurrentTime
     putStrLn $ "[TokenRefresher] Refreshing token at " <> show timestamp
 
