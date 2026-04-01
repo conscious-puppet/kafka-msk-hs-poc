@@ -1,4 +1,37 @@
-# Runtime Dockerfile - minimal image with kafka-proxy and pre-built Haskell binary
+# Two-stage Dockerfile: Build Haskell app in stage 1, minimal runtime in stage 2
+
+# Stage 1: Build the Haskell application
+FROM haskell:9.6 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    librdkafka-dev \
+    libssl-dev \
+    pkg-config \
+    ca-certificates \
+    build-essential \
+    gcc \
+    curl \
+    wget \
+    tar \
+    unzip \
+    bash \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /build
+
+# Copy cabal file and source
+COPY kafka-aws-haskell.cabal ./
+COPY src/ ./src/
+
+# Build the application
+RUN cabal update && cabal build exe:kafka-aws-haskell
+
+# Find the built binary path
+RUN cp $(cabal list-bin kafka-aws-haskell) /build/kafka-aws-haskell
+
+# Stage 2: Minimal runtime image
 FROM debian:bookworm-slim
 
 # Install runtime dependencies only
@@ -38,8 +71,8 @@ ENV APP_HOME=/opt/app
 RUN mkdir -p $APP_HOME
 WORKDIR $APP_HOME
 
-# Copy pre-built Haskell binary (build locally first with: cabal build)
-COPY dist-newstyle/build/x86_64-linux/ghc-*/kafka-aws-haskell-*/x/kafka-aws-haskell/build/kafka-aws-haskell/kafka-aws-haskell /usr/local/bin/kafka-aws-haskell
+# Copy pre-built Haskell binary from builder stage
+COPY --from=builder /build/kafka-aws-haskell /usr/local/bin/kafka-aws-haskell
 
 # Copy startup script
 COPY start.sh /opt/start.sh
