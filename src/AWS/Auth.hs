@@ -7,11 +7,13 @@ module AWS.Auth (
 )
 where
 
-import Amazonka (Region, newEnv, runResourceT, send)
+import Amazonka (LogLevel (..), Region, newEnv, runResourceT, send)
 import Amazonka.Auth (discover)
 import Amazonka.Crypto (hashSHA256, hmacSHA256)
 import Amazonka.Data.Sensitive (Sensitive (..), fromSensitive)
 import Amazonka.Data.Time (Time (..))
+import Amazonka.Env (logger)
+import Amazonka.Logger (newLogger)
 import Amazonka.STS (newAssumeRole)
 import Amazonka.STS.AssumeRole (AssumeRoleResponse (..))
 import Amazonka.Types (AccessKey (..), AuthEnv (..), SecretKey (..), SessionToken (..))
@@ -39,15 +41,21 @@ data IAMToken = IAMToken
 assumeRole :: Text -> Text -> Region -> IO IAMToken
 assumeRole roleArn sessionName _region = do
   putStrLn $ "[AWS.Auth] Assuming role: " <> toString roleArn
+  putStrLn "[AWS.Auth] Setting up debug logger..."
+
+  -- Create a logger that outputs to stderr
+  debugLogger <- newLogger Debug stderr
 
   -- Build the AssumeRole request
   let req = newAssumeRole roleArn sessionName
 
   -- Execute the request
   resp <- runResourceT $ do
-    -- Create environment and discover credentials (IRSA, instance profile, etc.)
+    -- Create environment with debug logging
     env <- newEnv discover
-    send env req
+    let envWithLogger = env {logger = debugLogger}
+    putStrLn "[AWS.Auth] Env created with debug logging, sending request..."
+    send envWithLogger req
 
   -- Extract credentials from response
   let authEnv = credentials resp
