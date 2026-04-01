@@ -6,10 +6,8 @@ module Kafka.MSK (
 )
 where
 
-import AWS.Auth (IAMToken (..), isAuthError)
-import Control.Exception (bracket, throwIO)
+import Control.Exception (bracket)
 import Kafka.Consumer
-import System.IO.Error (userError)
 
 data KafkaConfig = KafkaConfig
   { bootstrapServers :: Text
@@ -18,12 +16,9 @@ data KafkaConfig = KafkaConfig
   , region :: Text
   }
 
-{- | Run the MSK consumer with automatic reconnection on auth errors
-Returns Left on auth error (caller should reconnect), throws on other errors
--}
-runMSKConsumer :: KafkaConfig -> TVar IAMToken -> IO (Either KafkaError ())
-runMSKConsumer config _tokenVar = do
-  -- No token generation needed - kafka-proxy handles auth
+-- | Run the MSK consumer
+runMSKConsumer :: KafkaConfig -> IO ()
+runMSKConsumer config = do
   putStrLn "[Kafka.MSK] Connecting to kafka-proxy on localhost:9092 (no auth required)"
 
   let props = mkConsumerProps config
@@ -43,19 +38,14 @@ runMSKConsumer config _tokenVar = do
     ( \case
         Left err -> do
           putStrLn $ "[Kafka.MSK] Failed to create consumer: " <> show err
-          isAuth <- isAuthError err
-          if isAuth
-            then pure $ Left err
-            else throwIO $ userError $ "Fatal error creating consumer: " <> show err
+          error $ "Fatal error: " <> show err
         Right consumer -> do
           putStrLn "[Kafka.MSK] Consumer created, starting poll loop..."
           pollLoop consumer
     )
 
-{- | Continuous polling loop that handles auth errors gracefully
-Returns Left on auth error, throws on fatal errors
--}
-pollLoop :: KafkaConsumer -> IO (Either KafkaError ())
+-- | Continuous polling loop
+pollLoop :: KafkaConsumer -> IO ()
 pollLoop consumer = go
   where
     go = do
@@ -65,25 +55,17 @@ pollLoop consumer = go
       case msg of
         Left err -> do
           putStrLn $ "[Kafka.MSK] Poll error: " <> show err
-          isAuth <- isAuthError err
-          if isAuth
-            then do
-              putStrLn "[Kafka.MSK] Authentication error detected, will reconnect"
-              pure $ Left err
-            else do
-              -- For POC: log error and continue polling instead of crashing
-              putStrLn $ "[Kafka.MSK] Non-auth error, continuing: " <> show err
-              go
+          go
         Right record -> do
           -- Print the message
           case crValue record of
             Nothing -> putStrLn "[Kafka.MSK] Received message with no value"
             Just bs -> do
-              putStrLn "[Kafka.MSK] =============================="
+              putStrLn "[Kafka.MSK] ==============================="
               putStrLn "[Kafka.MSK] RECEIVED MESSAGE:"
-              putStrLn "[Kafka.MSK] =============================="
+              putStrLn "[Kafka.MSK] ==============================="
               putStrLn $ "[Kafka.MSK] " <> show bs
-              putStrLn "[Kafka.MSK] =============================="
+              putStrLn "[Kafka.MSK] ==============================="
 
           -- Continue polling (no offset commit, will re-read from earliest on restart)
           go

@@ -8,19 +8,14 @@ import Control.Exception (throwIO)
 import System.IO.Error (userError)
 
 data Config = Config
-  { awsRoleArn :: Text
-  , awsSessionName :: Text
-  , mskBootstrapServers :: Text
+  { mskBootstrapServers :: Text
   , mskTopic :: Text
   , mskRegion :: Text
   }
-  deriving stock (Show, Eq)
+  deriving (Show, Eq)
 
 loadConfig :: IO Config
 loadConfig = do
-  awsRoleArn <- getEnvVar "AWS_ROLE_ARN"
-  awsSessionName <- fromMaybe "kafka-haskell-poc" <$> lookupEnvText "AWS_SESSION_NAME"
-  -- Use PROXY_BOOTSTRAP_SERVERS if available (for kafka-proxy), otherwise fall back to MSK_BOOTSTRAP_SERVERS
   mskBootstrapServers <-
     lookupEnvText "PROXY_BOOTSTRAP_SERVERS" >>= \case
       Just proxyServers -> do
