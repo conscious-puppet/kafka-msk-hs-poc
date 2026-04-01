@@ -1,0 +1,85 @@
+cabal-version:      2.4
+name:               kafka-aws-haskell
+version:            0.1.0.0
+license:            MIT
+copyright:          2022 Abhishek Singh
+maintainer:         srid@srid.ca
+author:             Abhishek Singh
+category:           Web
+homepage:           https://srid.ca/kafka-aws-haskell
+
+-- TODO: Before hackage release.
+-- A short (one-line) description of the package.
+synopsis:           A template for Haskell projects using Nix
+
+-- A longer description of the package.
+-- description:
+
+-- A URL where users can report bugs.
+-- bug-reports:
+
+extra-source-files:
+  LICENSE
+  README.md
+
+common shared
+  ghc-options:
+    -Wall -Wincomplete-record-updates -Wincomplete-uni-patterns
+    -Wmissing-deriving-strategies -Wunused-foralls -Wunused-foralls
+    -fprint-explicit-foralls -fprint-explicit-kinds -Werror
+
+  mixins:
+    base hiding (Prelude),
+    relude (Relude as Prelude, Relude.Container.One),
+    relude
+
+  default-extensions:
+    DataKinds
+    DerivingStrategies
+    DerivingVia
+    LambdaCase
+    MultiWayIf
+    NoStarIsType
+    OverloadedLabels
+    OverloadedStrings
+    RecordWildCards
+    StrictData
+    TypeFamilies
+    ViewPatterns
+
+  build-depends:
+    , aeson
+    , amazonka
+    , amazonka-core
+    , amazonka-sts
+    , async
+    , base               >=4   && <5
+    , base64-bytestring
+    , bytestring
+    , data-default
+    , directory
+    , filepath
+    , http-types
+    , hw-kafka-client
+    , memory
+    , mtl
+    , optics-core
+    , profunctors
+    , relude             >=1.0
+    , shower
+    , stm
+    , text
+    , time
+    , unliftio-core
+    , with-utf8
+
+  hs-source-dirs:     src
+  default-language:   GHC2021
+
+executable kafka-aws-haskell
+  import:        shared
+  main-is:       Main.hs
+  other-modules:
+    AWS.Auth
+    Config
+    Kafka.MSK

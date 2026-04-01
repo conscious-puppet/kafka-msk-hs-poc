@@ -1,0 +1,32 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Nix
+.direnv
+result
+result-*
+
+# Build artifacts
+dist-newstyle
+dist
+
+# IDE
+.hie
+
+# Documentation
+README.md
+LICENSE
+stan.html
+
+# Development files
+.envrc
+.envrc.dev
+.pre-commit-config.yaml
+.hlint.yaml
+hie.yaml
+
+# Misc
+prompt.md
+vira.hs
