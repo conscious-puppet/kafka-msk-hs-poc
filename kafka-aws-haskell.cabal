@@ -7,7 +7,7 @@ maintainer:         srid@srid.ca
 author:             Abhishek Singh
 category:           Web
 homepage:           https://srid.ca/kafka-aws-haskell
-synopsis:           Simple Kafka consumer POC using kafka-proxy
+synopsis:           Kafka consumer POC with OAuthBearer/IAM auth
 extra-source-files:
   LICENSE
   README.md
@@ -29,10 +29,17 @@ common shared
     RecordWildCards
 
   build-depends:
+    , amazonka
+    , amazonka-core
+    , amazonka-sts
+    , async
     , base             >=4   && <5
+    , bytestring
     , hw-kafka-client
     , relude           >=1.0
+    , stm
     , text
+    , time
     , with-utf8
 
   hs-source-dirs:     src
@@ -42,5 +49,6 @@ executable kafka-aws-haskell
   import:        shared
   main-is:       Main.hs
   other-modules:
+    AWS.Auth
     Config
     Kafka.MSK

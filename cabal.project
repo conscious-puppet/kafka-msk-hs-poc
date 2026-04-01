@@ -1,0 +1,7 @@
+packages: .
+
+source-repository-package
+  type: git
+  location: https://github.com/conscious-puppet/hw-kafka-client.git
+  tag: feature/temp/oauth
+  subdir: .
