@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for kafka-aws-haskell
 # Stage 1: Build with Cabal
-FROM haskell:9.10-slim AS builder
+FROM haskell:9.6 AS builder
 
 # Install system dependencies for librdkafka
 RUN apt-get update && apt-get install -y \
