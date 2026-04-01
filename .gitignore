@@ -10,6 +10,7 @@ result-*
 
 # direnv
 .direnv
+.envrc.dev
 
 /.pre-commit-config.yaml
 
