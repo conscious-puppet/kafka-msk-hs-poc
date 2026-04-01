@@ -43,8 +43,12 @@ RUN apt-get update && apt-get install -y \
     python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python IAM Signer library
-RUN pip3 install --break-system-packages aws-msk-iam-sasl-signer-python
+# Create virtual environment and install Python IAM Signer library
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install aws-msk-iam-sasl-signer-python
+
+# Add venv to PATH
+ENV PATH="/opt/venv/bin:$PATH"
 
 # Environment variables
 ENV KAFKA_HOME=/opt/kafka
