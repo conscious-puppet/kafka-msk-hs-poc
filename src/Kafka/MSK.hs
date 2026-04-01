@@ -6,9 +6,8 @@ module Kafka.MSK (
 )
 where
 
-import AWS.Auth (IAMToken (..), generateIAMToken, isAuthError)
+import AWS.Auth (IAMToken (..), isAuthError)
 import Control.Exception (bracket, throwIO)
-import Data.Text qualified as T
 import Kafka.Consumer
 import System.IO.Error (userError)
 
@@ -23,12 +22,11 @@ data KafkaConfig = KafkaConfig
 Returns Left on auth error (caller should reconnect), throws on other errors
 -}
 runMSKConsumer :: KafkaConfig -> TVar IAMToken -> IO (Either KafkaError ())
-runMSKConsumer config tokenVar = do
-  -- Get current token and generate Kafka credentials
-  token <- readTVarIO tokenVar
-  (username, password) <- generateIAMToken token (extractBrokerHost $ bootstrapServers config) (region config)
+runMSKConsumer config _tokenVar = do
+  -- No token generation needed - kafka-proxy handles auth
+  putStrLn "[Kafka.MSK] Connecting to kafka-proxy on localhost:9092 (no auth required)"
 
-  let props = mkConsumerProps config username password
+  let props = mkConsumerProps config
       sub = mkSubscription config
 
   bracket
@@ -51,19 +49,16 @@ runMSKConsumer config tokenVar = do
             else throwIO $ userError $ "Fatal error creating consumer: " <> show err
         Right consumer -> do
           putStrLn "[Kafka.MSK] Consumer created, starting poll loop..."
-          pollLoop tokenVar consumer
+          pollLoop consumer
     )
 
 {- | Continuous polling loop that handles auth errors gracefully
 Returns Left on auth error, throws on fatal errors
 -}
-pollLoop :: TVar IAMToken -> KafkaConsumer -> IO (Either KafkaError ())
-pollLoop tokenVar consumer = go
+pollLoop :: KafkaConsumer -> IO (Either KafkaError ())
+pollLoop consumer = go
   where
     go = do
-      -- Check for token refresh (get current credentials)
-      _token <- readTVarIO tokenVar
-
       -- Poll for message with 10 second timeout
       msg <- pollMessage consumer (Timeout 10000)
 
@@ -84,29 +79,23 @@ pollLoop tokenVar consumer = go
           case crValue record of
             Nothing -> putStrLn "[Kafka.MSK] Received message with no value"
             Just bs -> do
-              let msgContent = T.unpack (decodeUtf8 bs)
               putStrLn "[Kafka.MSK] =============================="
               putStrLn "[Kafka.MSK] RECEIVED MESSAGE:"
               putStrLn "[Kafka.MSK] =============================="
-              putStrLn $ "[Kafka.MSK] " <> msgContent
+              putStrLn $ "[Kafka.MSK] " <> show bs
               putStrLn "[Kafka.MSK] =============================="
 
           -- Continue polling (no offset commit, will re-read from earliest on restart)
           go
 
--- | Extract host from "host:port" format
-extractBrokerHost :: Text -> Text
-extractBrokerHost = T.takeWhile (/= ':')
-
-mkConsumerProps :: KafkaConfig -> Text -> Text -> ConsumerProperties
-mkConsumerProps config username password =
+mkConsumerProps :: KafkaConfig -> ConsumerProperties
+mkConsumerProps config =
   brokersList [BrokerAddress $ bootstrapServers config]
     <> groupId (ConsumerGroupId $ consumerGroupId config)
     <> noAutoCommit
-    <> extraProp "security.protocol" "sasl_ssl"
-    <> extraProp "sasl.mechanism" "PLAIN"
-    <> extraProp "sasl.username" username
-    <> extraProp "sasl.password" password
+    -- Connect to kafka-proxy on localhost with PLAINTEXT (no auth)
+    -- The proxy handles MSK IAM auth, clients connect without SASL
+    <> extraProp "security.protocol" "plaintext"
     <> extraProp "enable.auto.commit" "false"
     <> extraProp "auto.offset.reset" "earliest"
 
