@@ -20,7 +20,15 @@ loadConfig :: IO Config
 loadConfig = do
   awsRoleArn <- getEnvVar "AWS_ROLE_ARN"
   awsSessionName <- fromMaybe "kafka-haskell-poc" <$> lookupEnvText "AWS_SESSION_NAME"
-  mskBootstrapServers <- getEnvVar "MSK_BOOTSTRAP_SERVERS"
+  -- Use PROXY_BOOTSTRAP_SERVERS if available (for kafka-proxy), otherwise fall back to MSK_BOOTSTRAP_SERVERS
+  mskBootstrapServers <-
+    lookupEnvText "PROXY_BOOTSTRAP_SERVERS" >>= \case
+      Just proxyServers -> do
+        putStrLn $ "[Config] Using proxy bootstrap servers: " <> toString proxyServers
+        pure proxyServers
+      Nothing -> do
+        putStrLn "[Config] Using direct MSK bootstrap servers"
+        getEnvVar "MSK_BOOTSTRAP_SERVERS"
   mskTopic <- getEnvVar "MSK_TOPIC"
   mskRegion <- fromMaybe "ap-south-1" <$> lookupEnvText "MSK_REGION"
   pure Config {..}

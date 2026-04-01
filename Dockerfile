@@ -32,6 +32,15 @@ RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2
     ./aws/install && \
     rm -rf aws awscliv2.zip
 
+# Install kafka-proxy for MSK IAM authentication
+RUN cd /opt && \
+    KAFKA_PROXY_VERSION=$(curl -s https://api.github.com/repos/grepplabs/kafka-proxy/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') && \
+    wget https://github.com/grepplabs/kafka-proxy/releases/download/${KAFKA_PROXY_VERSION}/kafka-proxy-${KAFKA_PROXY_VERSION}-linux-amd64.zip && \
+    unzip kafka-proxy-${KAFKA_PROXY_VERSION}-linux-amd64.zip && \
+    mv kafka-proxy-${KAFKA_PROXY_VERSION}-linux-amd64 kafka-proxy && \
+    chmod +x kafka-proxy && \
+    rm kafka-proxy-*.zip
+
 # Install Kafka CLI tools
 RUN mkdir -p /opt && cd /opt && \
     wget https://downloads.apache.org/kafka/3.9.2/kafka_2.13-3.9.2.tgz && \
@@ -60,7 +69,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Environment variables
 ENV KAFKA_HOME=/opt/kafka
 ENV CLASSPATH=/opt/aws-msk-iam-auth-1.1.9-all.jar
-ENV PATH="$PATH:$KAFKA_HOME/bin"
+ENV PATH="$PATH:$KAFKA_HOME/bin:/opt"
 ENV APP_HOME=/opt/app
 
 # Create app directory
@@ -81,6 +90,10 @@ RUN cabal build exe:kafka-aws-haskell
 
 # Create a symlink for easy access
 RUN ln -sf $(cabal list-bin kafka-aws-haskell) /usr/local/bin/kafka-aws-haskell
+
+# Copy startup script
+COPY start.sh /opt/start.sh
+RUN chmod +x /opt/start.sh
 
 # Set up for interactive use
 RUN echo 'export PS1="[kafka-hs] \w $ "' >> /root/.bashrc
