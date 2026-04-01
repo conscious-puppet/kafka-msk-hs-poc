@@ -25,6 +25,15 @@ BROKER_PORT=$(echo $FIRST_BROKER | cut -d':' -f2)
 # Start kafka-proxy in the background
 echo "[Start Script] Starting kafka-proxy..."
 echo "[Start Script] Forwarding localhost:9092 -> $FIRST_BROKER with AWS_MSK_IAM auth"
+echo "[Start Script] AWS_ROLE_ARN: ${AWS_ROLE_ARN:-not set}"
+echo "[Start Script] AWS_WEB_IDENTITY_TOKEN_FILE: ${AWS_WEB_IDENTITY_TOKEN_FILE:-not set}"
+
+# Add role ARN if available (for IRSA role assumption)
+SASL_ROLE_ARN_ARG=""
+if [ -n "$AWS_ROLE_ARN" ]; then
+    SASL_ROLE_ARN_ARG="--sasl-aws-role-arn=$AWS_ROLE_ARN"
+    echo "[Start Script] Using role ARN: $AWS_ROLE_ARN"
+fi
 
 /opt/kafka-proxy server \
     --bootstrap-server-mapping "$FIRST_BROKER,127.0.0.1:9092" \
@@ -33,7 +42,8 @@ echo "[Start Script] Forwarding localhost:9092 -> $FIRST_BROKER with AWS_MSK_IAM
     --sasl-enable \
     --sasl-method "AWS_MSK_IAM" \
     --sasl-aws-region "$MSK_REGION" \
-    --log-level info &
+    $SASL_ROLE_ARN_ARG \
+    --log-level debug &
 
 KAFKA_PROXY_PID=$!
 echo "[Start Script] kafka-proxy started with PID $KAFKA_PROXY_PID"
