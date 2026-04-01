@@ -21,10 +21,9 @@ RUN apt-get update && apt-get install -y \
 # Create app directory
 WORKDIR /build
 
-# Copy cabal files and local hw-kafka-client package
+# Copy cabal files (cabal.project references GitHub fork of hw-kafka-client)
 COPY cabal.project ./
 COPY kafka-aws-haskell.cabal ./
-COPY hw-kafka-client/ ./hw-kafka-client/
 COPY src/ ./src/
 
 # Build the application (includes local hw-kafka-client)
