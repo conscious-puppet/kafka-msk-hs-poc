@@ -73,10 +73,10 @@ RUN echo 'http://dl-cdn.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositori
 
 # Download Kafka
 RUN mkdir -p /opt && cd /opt && \
-    wget https://downloads.apache.org/kafka/3.9.0/kafka_2.13-3.9.0.tgz && \
-    tar -xzf kafka_2.13-3.9.0.tgz && \
-    mv kafka_2.13-3.9.0 kafka && \
-    rm kafka_2.13-3.9.0.tgz
+    wget https://downloads.apache.org/kafka/3.8.0/kafka_2.13-3.8.0.tgz && \
+    tar -xzf kafka_2.13-3.8.0.tgz && \
+    mv kafka_2.13-3.8.0 kafka && \
+    rm kafka_2.13-3.8.0.tgz
 
 # Download AWS MSK IAM auth library
 RUN cd /opt && \
