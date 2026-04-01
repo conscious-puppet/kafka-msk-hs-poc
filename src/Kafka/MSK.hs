@@ -74,8 +74,9 @@ pollLoop tokenVar consumer = go
               putStrLn "[Kafka.MSK] Authentication error detected, will reconnect"
               pure $ Left err
             else do
-              putStrLn $ "[Kafka.MSK] Fatal error: " <> show err
-              throwIO $ userError $ "Fatal consumer error: " <> show err
+              -- For POC: log error and continue polling instead of crashing
+              putStrLn $ "[Kafka.MSK] Non-auth error, continuing: " <> show err
+              go
         Right record -> do
           -- Print the message
           case crValue record of
