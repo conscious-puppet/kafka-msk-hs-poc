@@ -5,17 +5,17 @@ module AWS.Auth (
 )
 where
 
-import Amazonka (LogLevel (..), Region, newEnv, runResourceT, send)
+import Amazonka (LogLevel (..), Region (..), configureService, newEnv, runResourceT, send)
 import Amazonka.Auth (discover)
+import Amazonka.Data.ByteString (toBS)
 import Amazonka.Data.Sensitive (fromSensitive)
 import Amazonka.Data.Time (Time (..))
 import Amazonka.Env (logger)
 import Amazonka.Env qualified as Env
 import Amazonka.Logger (newLogger)
-import Amazonka.STS (newAssumeRole)
+import Amazonka.STS (defaultService, newAssumeRole)
 import Amazonka.STS.AssumeRole (AssumeRoleResponse (..))
-import Amazonka.Types (AccessKey (..), AuthEnv (..), SecretKey (..), SessionToken (..))
-import Data.ByteString.Char8 qualified as B8
+import Amazonka.Types (AccessKey (..), AuthEnv (..), Endpoint (..), SecretKey (..), Service (..), SessionToken (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Time.Clock (UTCTime, getCurrentTime)
@@ -30,10 +30,12 @@ data IAMToken = IAMToken
   }
   deriving stock (Show)
 
--- | Assume a role using STS and return the credentials
+{- | Assume a role using STS and return the credentials
+Uses regional STS endpoint with correct signing scope
+-}
 assumeRole :: Text -> Text -> Region -> IO IAMToken
 assumeRole roleArn sessionName region = do
-  putStrLn $ "[AWS.Auth] Assuming role: " <> Text.unpack roleArn
+  putStrLn $ "[AWS.Auth] Assuming role: " <> toString roleArn
   putStrLn $ "[AWS.Auth] Using region: " <> show region
 
   -- Create a logger that outputs to stderr
@@ -45,9 +47,28 @@ assumeRole roleArn sessionName region = do
   -- Execute the request
   resp <- runResourceT $ do
     env <- newEnv discover
-    let envWithConfig = (env {logger = debugLogger}) {Env.region = region}
-    putStrLn "[AWS.Auth] Sending STS AssumeRole request..."
-    send envWithConfig req
+    let envWithRegion = (env {logger = debugLogger}) {Env.region = region}
+
+    -- Configure STS to use regional endpoint with correct signing scope
+    -- The key is to set the 'scope' field in Endpoint to the region for correct signing
+    let stsEndpointHost = encodeUtf8 $ "sts." <> fromRegion region <> ".amazonaws.com"
+    let stsService =
+          defaultService
+            { endpoint =
+                const $
+                  Endpoint
+                    { host = stsEndpointHost
+                    , basePath = mempty
+                    , secure = True
+                    , port = 443
+                    , scope = toBS region -- This is crucial: sets the signing region!
+                    }
+            }
+    let envWithSTS = configureService stsService envWithRegion
+
+    putStrLn $ "[AWS.Auth] Using STS regional endpoint: " <> decodeUtf8 stsEndpointHost
+    putStrLn $ "[AWS.Auth] Signing scope (region): " <> decodeUtf8 (toBS region)
+    send envWithSTS req
 
   -- Extract credentials from response
   let authEnv = credentials resp
@@ -68,6 +89,7 @@ assumeRole roleArn sessionName region = do
     fromAccessKey (AccessKey bs) = bs
     fromSecretKey (SecretKey bs) = bs
     fromSessionToken (SessionToken bs) = bs
+    fromRegion (Region' r) = r
 
 {- | Generate OAuthBearer token for MSK IAM authentication
 This creates a signed URL token that can be used with OAUTHBEARER SASL mechanism
@@ -89,11 +111,11 @@ generateMSKToken token brokerHost region = do
   -- In production, you'd use the AWS MSK IAM signer logic
 
   let tokenValue =
-        Text.unlines
+        unlines
           [ "host=" <> brokerHost
-          , "x-amz-date=" <> Text.pack dateStr
+          , "x-amz-date=" <> toText dateStr
           , "x-amz-security-token=" <> iamSessionToken token
-          , "x-amz-credential=" <> iamAccessKeyId token <> "/" <> Text.pack (formatTime defaultTimeLocale "%Y%m%d" now) <> "/" <> region <> "/kafka-cluster/aws4_request"
+          , "x-amz-credential=" <> iamAccessKeyId token <> "/" <> toText (formatTime defaultTimeLocale "%Y%m%d" now) <> "/" <> region <> "/kafka-cluster/aws4_request"
           , "Action=Bootstrap"
           ]
 
