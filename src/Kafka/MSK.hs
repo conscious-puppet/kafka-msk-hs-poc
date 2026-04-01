@@ -85,11 +85,11 @@ pollLoop tokenVar consumer = go
             Nothing -> putStrLn "[Kafka.MSK] Received message with no value"
             Just bs -> do
               let msgContent = T.unpack (decodeUtf8 bs)
-              putStrLn $ "[Kafka.MSK] =============================="
-              putStrLn $ "[Kafka.MSK] RECEIVED MESSAGE:"
-              putStrLn $ "[Kafka.MSK] =============================="
+              putStrLn "[Kafka.MSK] =============================="
+              putStrLn "[Kafka.MSK] RECEIVED MESSAGE:"
+              putStrLn "[Kafka.MSK] =============================="
               putStrLn $ "[Kafka.MSK] " <> msgContent
-              putStrLn $ "[Kafka.MSK] =============================="
+              putStrLn "[Kafka.MSK] =============================="
 
           -- Continue polling (no offset commit, will re-read from earliest on restart)
           go

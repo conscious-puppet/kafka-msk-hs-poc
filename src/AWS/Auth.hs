@@ -7,9 +7,10 @@ module AWS.Auth (
 )
 where
 
-import Amazonka (LogLevel (..), Region (..), configureService, newEnv, runResourceT, send, setEndpoint)
+import Amazonka (LogLevel (..), Region (..), configureService, newEnv, runResourceT, send)
 import Amazonka.Auth (discover)
 import Amazonka.Crypto (hashSHA256, hmacSHA256)
+import Amazonka.Data.ByteString (toBS)
 import Amazonka.Data.Sensitive (Sensitive (..), fromSensitive)
 import Amazonka.Data.Time (Time (..))
 import Amazonka.Env (logger)
@@ -17,7 +18,7 @@ import Amazonka.Env qualified as Env
 import Amazonka.Logger (newLogger)
 import Amazonka.STS (defaultService, newAssumeRole)
 import Amazonka.STS.AssumeRole (AssumeRoleResponse (..))
-import Amazonka.Types (AccessKey (..), AuthEnv (..), SecretKey (..), SessionToken (..))
+import Amazonka.Types (AccessKey (..), AuthEnv (..), Endpoint (..), SecretKey (..), Service (..), SessionToken (..))
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async (Async, async)
 import Data.ByteArray (ByteArrayAccess, convert)
@@ -39,7 +40,7 @@ data IAMToken = IAMToken
   deriving stock (Show)
 
 {- | Assume a role using STS and return the credentials
-Uses regional STS endpoint to avoid timeout issues with global endpoint
+Uses regional STS endpoint with correct signing scope
 -}
 assumeRole :: Text -> Text -> Region -> IO IAMToken
 assumeRole roleArn sessionName region = do
@@ -59,13 +60,25 @@ assumeRole roleArn sessionName region = do
     env <- newEnv discover
     let envWithRegion = (env {logger = debugLogger}) {Env.region = region}
 
-    -- Configure STS to use regional endpoint instead of global sts.amazonaws.com
-    -- This matches the behavior of AWS_STS_REGIONAL_ENDPOINTS=regional in other SDKs
-    let stsEndpoint = encodeUtf8 $ "sts." <> fromRegion region <> ".amazonaws.com"
-    let stsService = setEndpoint True stsEndpoint 443 defaultService
+    -- Configure STS to use regional endpoint with correct signing scope
+    -- The key is to set the 'scope' field in Endpoint to the region for correct signing
+    let stsEndpointHost = encodeUtf8 $ "sts." <> fromRegion region <> ".amazonaws.com"
+    let stsService =
+          defaultService
+            { endpoint =
+                const $
+                  Endpoint
+                    { host = stsEndpointHost
+                    , basePath = mempty
+                    , secure = True
+                    , port = 443
+                    , scope = toBS region -- This is crucial: sets the signing region!
+                    }
+            }
     let envWithSTS = configureService stsService envWithRegion
 
-    putStrLn $ "[AWS.Auth] Using STS regional endpoint: " <> decodeUtf8 stsEndpoint
+    putStrLn $ "[AWS.Auth] Using STS regional endpoint: " <> decodeUtf8 stsEndpointHost
+    putStrLn $ "[AWS.Auth] Signing scope (region): " <> decodeUtf8 (toBS region)
     send envWithSTS req
 
   -- Extract credentials from response
